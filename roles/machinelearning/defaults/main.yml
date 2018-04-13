@@ -1,0 +1,10 @@
+# defaults file for nodejs
+anaconda_installer: Anaconda3-4.3.0-Linux-x86_64.sh
+anaconda_url: http://repo.continuum.io/archive/{{ anaconda_installer }}
+#anaconda_sha: 4f5c95feb0e7efeadd3d348dcef117d7787c799f24b0429e45017008f3534e55
+install_dir: /
+installer_path: "{{ install_dir }}/{{ anaconda_installer }}"
+anaconda_path: "{{ install_dir }}/anaconda3"
+anaconda_bin_path: "{{ anaconda_path }}/bin"
+conda: "{{ anaconda_path }}/bin/conda"
+

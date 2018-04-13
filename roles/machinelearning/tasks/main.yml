@@ -1,0 +1,176 @@
+- name: "Installing Epel-Release"
+  yum: pkg=epel-release state=installed
+
+
+- name: "Installing Node"
+  shell: "{{ item }}"
+  args:
+    chdir: /home/rmanlawe
+  with_items:
+  - curl --silent --location https://rpm.nodesource.com/setup_8.x | sudo bash -
+
+
+
+- name: "Installing NodeJS"
+  yum: pkg=nodejs state=installed
+
+
+- name: "Install configurable-http-proxy"
+  shell: npm install -g configurable-http-proxy
+
+
+
+- name: "Installing Jupyterhub Dependencies"
+  yum: pkg={{ item }} state=installed
+  with_items:
+  - bzip2
+  - net-tools
+  - git
+  - pexpect
+
+- name: Install nodejs and development tools
+  yum: name={{item}}
+  with_items:
+    - nodejs
+    - gcc-c++
+    - make
+
+
+
+- name: "Installing Configurable Proxy"
+  shell: npm install -g configurable-http-proxy
+
+
+
+- name: "Download Anaconda"
+  get_url: url={{ anaconda_url }}
+           dest={{ installer_path }}
+           mode=0755
+           force=no
+
+- name: "Install Anaconda"
+  become: true
+  command: "{{ installer_path }} -b -p {{ anaconda_path }} creates={{ anaconda_path }}"
+
+- name: "Create default-notebook via Conda"
+  shell: ./conda create -n default-notebook ipykernel -y
+  args:
+   chdir: /anaconda3/bin/
+   executable: /bin/bash
+
+- name: "Activate default-notebook"
+  shell: source activate default-notebook
+  args:
+   chdir: /anaconda3/bin/
+   executable: /bin/bash
+
+
+- name: "Install ipykernel"
+  shell: /anaconda3/bin/python -m ipykernel install
+  args:
+   chdir: /anaconda3/bin/
+   executable: /bin/bash
+
+- name: "Source deactivate"
+  shell: source deactivate
+  args:
+   chdir: /anaconda3/bin/
+   executable: /bin/bash
+
+- name: "Add sudospawner_user"
+  shell: useradd sudospawner_user
+
+- name: "Installing Sudospawner"
+  shell: /anaconda3/bin/pip install git+https://github.com/jupyter/sudospawner
+  args:
+   chdir: /anaconda3/bin/
+   executable: /bin/bash
+
+- name: "Configure Sudoers File"
+  lineinfile:
+    dest: /etc/sudoers
+    line: "{{ item }}"
+
+  with_items:
+    - "Cmnd_Alias JUPYTER_CMD = /anaconda3/bin/sudospawner"
+    -  "sudospawner_user ALL=(ALL) NOPASSWD:JUPYTER_CMD"
+
+- name: "Add ops scripts to sudo secure_path"
+  lineinfile:
+    dest: /etc/sudoers
+    regexp: >
+      ^Defaults   secure_path = /sbin:/bin:/usr/sbin:/usr/bin
+    validate: visudo -cf %s
+    state: absent
+
+- name: "Add ops scripts to sudo secure_path"
+  lineinfile:
+    dest: /etc/sudoers
+    line: 'Defaults    secure_path ="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/snap/bin:/anaconda3/bin"'
+    validate: visudo -cf %s
+    state: present
+
+
+- name: "Adding shadow group"
+  shell: "{{ item }}"
+  with_items:
+  - groupadd shadow
+  - chgrp shadow /etc/shadow
+  - chmod g+r /etc/shadow
+  - usermod -a -G shadow sudospawner_user
+  - setcap 'cap_net_bind_service=+ep' /usr/bin/node
+
+
+
+- name: "Creates Jupyterhub directory"
+  file:
+    path: /etc/jupyterhub
+    state: directory
+    owner: sudospawner_user
+    group: sudospawner_user
+    mode: 0755
+
+- name: "Configure Jupyterhub "
+  shell: "{{ item }}"
+  args:
+   chdir: /etc/jupyterhub
+  with_items:
+  - sudo -u sudospawner_user /anaconda3/bin/jupyterhub --generate-config
+
+
+- name: "Append config in jupyterhub_config.py"
+  lineinfile:
+    dest: /etc/jupyterhub/jupyterhub_config.py
+    line: "{{ item }}"
+
+  with_items:
+    - c.JupyterHub.spawner_class = 'sudospawner.SudoSpawner'
+    - c.JupyterHub.hub_port = 8081
+    - c.JupyterHub.port = 8000
+  
+- name: "Modifying Pam Configurations"
+  replace:
+    dest: /etc/pam.d/login
+    regexp: 'session    required     pam_loginuid.so'
+    replace: '#session    required     pam_loginuid.so'
+     
+- name: "Comment Pam Configuration Pam_Selinux.so"
+  replace:
+    dest: /etc/pam.d/login
+    regexp: 'session    required     pam_selinux.so open'
+    replace: '#session    required     pam_selinux.so open'
+
+
+- name: "Launch  Jupyterhub using sudospawner "
+  shell: "{{ item }}"
+  args:
+   chdir: /etc/jupyterhub
+  with_items:
+   - rm -f /etc/jupyterhub/jupyterhub_cookie_secret
+#   - ps aux | grep node | awk '{print $2}' | xargs sudo kill -9 
+#   - ps aux | grep jupyterhub | awk '{print $2}' | xargs sudo kill -9 
+
+- name: "launch jupy"  
+  shell: screen -m -d sudo -u sudospawner_user /anaconda3/bin/jupyterhub -f /etc/jupyterhub/jupyterhub_config.py &
+  args:
+    chdir: /etc/jupyterhub 
