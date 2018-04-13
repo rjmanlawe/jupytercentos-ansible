@@ -1,6 +1,12 @@
 - name: "Installing Epel-Release"
   yum: pkg=epel-release state=installed
 
+- name: "Installing Libselinux-python"
+  yum: pkg=libselinux-python state=installed
+
+- name: "Installing Screen"
+  yum: pkg=screen state=installed
+
 
 - name: "Installing Node"
   shell: "{{ item }}"
@@ -17,6 +23,12 @@
 
 - name: "Install configurable-http-proxy"
   shell: npm install -g configurable-http-proxy
+
+- name: "Iptables stop"
+  shell: service iptables stop
+
+- name: "Configure Selinux permission"
+  shell: setenforce 0
 
 
 
@@ -161,12 +173,12 @@
     replace: '#session    required     pam_selinux.so open'
 
 
-- name: "Launch  Jupyterhub using sudospawner "
-  shell: "{{ item }}"
-  args:
-   chdir: /etc/jupyterhub
-  with_items:
-   - rm -f /etc/jupyterhub/jupyterhub_cookie_secret
+#- name: "Launch  Jupyterhub using sudospawner "
+#  shell: "{{ item }}"
+#  args:
+#   chdir: /etc/jupyterhub
+#  with_items:
+#   - rm -f /etc/jupyterhub/jupyterhub_cookie_secret
 #   - ps aux | grep node | awk '{print $2}' | xargs sudo kill -9 
 #   - ps aux | grep jupyterhub | awk '{print $2}' | xargs sudo kill -9 
 
